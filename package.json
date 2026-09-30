@@ -1,6 +1,6 @@
 {
   "name": "pandao-receivables",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "private": true,
   "description": "按统计日期查看未收金额、逾期账龄和客户余额。",
   "license": "MIT",
