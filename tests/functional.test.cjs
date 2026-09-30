@@ -1,0 +1,15 @@
+const test=require('node:test');const assert=require('node:assert/strict');const P=require('../planning.js');
+const row={invoice:'A',customer:'甲',due:'2026-09-01',amount:100,paid:20};
+test("部分收款与客户余额独立核对",()=>{const r=P.aging([row,{...row,invoice:'B',due:'2026-10-01',amount:50,paid:0}],'2026-09-30');assert.deepEqual([r.billed,r.paid,r.outstanding,r.overdue],[150,20,130,80]);assert.equal(r.customers[0].balance,130);assert.equal(r.buckets.reduce((s,b)=>s+b.amount,0),130);});
+test("当天到期未计逾期",()=>{const r=P.aging([{...row,due:'2026-09-30'}],'2026-09-30');assert.equal(r.overdue,0);assert.equal(r.details[0].status,'今天到期');});
+test("已结清旧账不占账龄",()=>{const r=P.aging([{...row,paid:100}],'2026-09-30');assert.equal(r.details[0].days,0);assert.equal(r.details[0].bucket,'已结清');assert.equal(r.buckets.reduce((s,b)=>s+b.count,0),0);});
+test("账龄区间分界独立核对",()=>{const dates=['2026-09-30','2026-09-29','2026-08-31','2026-08-30','2026-08-01','2026-07-31','2026-07-02','2026-07-01','2026-04-03','2026-04-02'];const r=P.aging(dates.map((due,i)=>({...row,invoice:String(i),due})),'2026-09-30');assert.deepEqual(r.details.map(x=>x.days),[0,1,30,31,60,61,90,91,180,181]);assert.deepEqual(r.buckets.map(x=>x.count),[1,2,2,2,2,1]);});
+test("重复账单阻止重复计款",()=>{assert.throws(()=>P.aging([row,row],'2026-09-30'),/重复/);});
+test("已收超过账单被拒绝",()=>{assert.throws(()=>P.aging([{...row,paid:101}],'2026-09-30'),/不能大于/);});
+test("不存在的日期被拒绝",()=>{assert.throws(()=>P.aging([{...row,due:'2026-02-30'}],'2026-09-30'),/有效日期/);});
+test("闰日账龄核对",()=>{assert.equal(P.aging([{...row,due:'2024-02-29'}],'2024-03-01').details[0].days,1);});
+test("半分金额舍入不丢一分钱",()=>{assert.equal(P.aging([{...row,amount:10.075,paid:0}],'2026-09-30').outstanding,10.08);});
+test("缺失金额不能当成零",()=>{assert.throws(()=>P.aging([{...row,paid:''}],'2026-09-30'),/请填写/);});
+test("负账单金额被拒绝",()=>{assert.throws(()=>P.aging([{...row,amount:-1}],'2026-09-30'));});
+test("金额合计超过安全范围被拒绝",()=>{assert.throws(()=>P.aging([{...row,amount:60000000000000},{...row,invoice:'B',amount:60000000000000}],'2026-09-30'),/超出/);});
+test("空表给出填写方向",()=>{assert.throws(()=>P.aging([],'2026-09-30'),/至少/);});
